@@ -62,7 +62,7 @@ const CartSidebar = () => {
         );
     };
 
-    const handleWhatsAppCheckout = () => {
+    const handleTelegramCheckout = () => {
         const phoneNumber = "5491172383806";
 
         if (cartItems.length === 0) return;
@@ -73,38 +73,33 @@ const CartSidebar = () => {
 
         const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formData.address)}`;
 
-        // MENSAJE 1: Datos del cliente
-        let message1 = `*🌸 NUEVO PEDIDO WEB - FLORERÍA LIZ*%0A%0A`;
-        message1 += `*DATOS DEL CLIENTE:*%0A`;
-        message1 += `👤 Nombre: ${formData.name}%0A`;
-        message1 += `📍 Dirección: ${formData.address}%0A`;
-        message1 += `🗺️ Ver mapa: ${mapsLink}%0A%0A`;
-        message1 += `_Enviando detalles del pedido..._`;
+        // MENSAJE COMPLETO en Telegram (sin límite de caracteres)
+        let message = `🌸 *NUEVO PEDIDO WEB - FLORERÍA LIZ*\n\n`;
+        message += `*DATOS DEL CLIENTE:*\n`;
+        message += `👤 Nombre: ${formData.name}\n`;
+        message += `📍 Dirección: ${formData.address}\n`;
+        message += `🗺️ Ver mapa: ${mapsLink}\n\n`;
+        message += `*DETALLE DEL PEDIDO:*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n\n`;
 
-        // Abrir primer mensaje
-        window.open(`https://wa.me/${phoneNumber}?text=${message1}`, '_blank');
+        let total = 0;
+        cartItems.forEach((item, index) => {
+            const subtotal = item.price * item.quantity;
+            total += subtotal;
+            message += `${index + 1}. *${item.name}*\n`;
+            message += `   📦 Cantidad: ${item.quantity}\n`;
+            message += `   💰 Precio: $${item.price.toLocaleString()}\n`;
+            message += `   💵 Subtotal: $${subtotal.toLocaleString()}\n`;
+            message += `   🖼️ Imagen: ${item.image}\n\n`;
+        });
 
-        // MENSAJE 2: Productos y total
-        setTimeout(() => {
-            let message2 = `*DETALLE DEL PEDIDO:*%0A`;
-            message2 += `Cliente: ${formData.name}%0A%0A`;
+        message += `━━━━━━━━━━━━━━━━━━\n`;
+        message += `💳 *TOTAL: $${total.toLocaleString()}*\n`;
+        message += `━━━━━━━━━━━━━━━━━━\n\n`;
+        message += `Por favor confirmar disponibilidad y costo de envío. ¡Gracias! 🌸`;
 
-            let total = 0;
-            cartItems.forEach((item, index) => {
-                const subtotal = item.price * item.quantity;
-                total += subtotal;
-                message2 += `${index + 1}. *${item.name}*%0A`;
-                message2 += `   • Cantidad: ${item.quantity}%0A`;
-                message2 += `   • Precio: $${item.price.toLocaleString()}%0A`;
-                message2 += `   • Subtotal: $${subtotal.toLocaleString()}%0A%0A`;
-            });
-
-            message2 += `━━━━━━━━━━━━━━━━━━%0A`;
-            message2 += `💰 *TOTAL: $${total.toLocaleString()}*%0A━━━━━━━━━━━━━━━━━━%0A%0A`;
-            message2 += `Por favor confirmar disponibilidad y costo de envío. ¡Gracias! 🌸`;
-
-            window.open(`https://wa.me/${phoneNumber}?text=${message2}`, '_blank');
-        }, 3000);
+        // Abrir Telegram con el mensaje completo
+        window.open(`https://t.me/+${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     return (
@@ -265,11 +260,11 @@ const CartSidebar = () => {
                             </div>
 
                             <button
-                                onClick={handleWhatsAppCheckout}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-green-600/20 transform hover:-translate-y-1"
+                                onClick={handleTelegramCheckout}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-600/20 transform hover:-translate-y-1"
                             >
                                 <MessageCircle size={20} />
-                                <span>Finalizar Pedido por WhatsApp</span>
+                                <span>Finalizar Pedido por Telegram</span>
                             </button>
 
                             <p className="text-xs text-gray-400 text-center mt-3">
