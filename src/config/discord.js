@@ -3,7 +3,7 @@ export const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/14423105860
 
 // Send order to Discord
 export const sendOrderToDiscord = async (orderData) => {
-    const { customerName, customerAddress, items, orderNumber } = orderData;
+    const { customerName, customerAddress, customerPhone, deliveryDate, cardMessage, items, orderNumber } = orderData;
 
     // Calcular total
     const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -18,6 +18,10 @@ export const sendOrderToDiscord = async (orderData) => {
     // Mapa de Google Maps
     const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
 
+    // Link directo a WhatsApp del cliente (limpiar número)
+    const cleanPhone = customerPhone.replace(/\D/g, '');
+    const clientWhatsApp = `https://wa.me/${cleanPhone}`;
+
     // Crear mensaje embed para Discord
     const embed = {
         title: `🌸 NUEVO PEDIDO #${orderNumber}`,
@@ -30,13 +34,28 @@ export const sendOrderToDiscord = async (orderData) => {
                 inline: true
             },
             {
+                name: "📅 Fecha Entrega",
+                value: deliveryDate || "Lo antes posible",
+                inline: true
+            },
+            {
                 name: "👤 Cliente",
                 value: customerName,
                 inline: true
             },
             {
+                name: "📱 Teléfono",
+                value: `[${customerPhone}](${clientWhatsApp}) \n🔗 [Click para Chatear](${clientWhatsApp})`,
+                inline: true
+            },
+            {
                 name: "📍 Dirección",
                 value: `${customerAddress}\n[Ver en Google Maps](${mapsLink})`,
+                inline: false
+            },
+            {
+                name: "💌 Mensaje para Tarjeta",
+                value: cardMessage ? `*"${cardMessage}"*` : "Sin mensaje",
                 inline: false
             },
             {
@@ -52,7 +71,7 @@ export const sendOrderToDiscord = async (orderData) => {
             }
         ],
         footer: {
-            text: `ID: ${orderNumber} • Por favor confirmar disponibilidad`
+            text: `ID: ${orderNumber} • Sistema de Pedidos Florería Liz`
         },
         timestamp: new Date().toISOString()
     };
@@ -64,7 +83,8 @@ export const sendOrderToDiscord = async (orderData) => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                content: `@everyone 📢 Nuevo pedido **${orderNumber}** recibido`,
+                content: `@everyone 📢 ¡Nuevo pedido de ${customerName}! Total: $${total.toLocaleString()}`,
+                tts: true, // ACTIVA LA VOZ EN DISCORD
                 embeds: [embed]
             })
         });

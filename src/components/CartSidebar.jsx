@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Trash2, MessageCircle, MapPin, User, Crosshair, Send, CheckCircle, Loader, FileText, ExternalLink } from 'lucide-react';
+import { X, Trash2, MessageCircle, MapPin, User, Crosshair, Send, CheckCircle, Loader, FileText, Calendar, Phone, Heart } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { sendOrderToDiscord } from '../config/discord';
 import { jsPDF } from 'jspdf';
@@ -8,7 +8,10 @@ const CartSidebar = () => {
     const { cartItems, isCartOpen, toggleCart, removeFromCart, updateQuantity } = useCart();
     const [formData, setFormData] = useState({
         name: '',
-        address: ''
+        phone: '',
+        address: '',
+        date: '',
+        message: ''
     });
     const [isLocating, setIsLocating] = useState(false);
     const [orderStatus, setOrderStatus] = useState({ sent: false, sending: false, error: false });
@@ -68,8 +71,8 @@ const CartSidebar = () => {
 
     const handleDiscordCheckout = async () => {
         if (cartItems.length === 0) return;
-        if (!formData.name || !formData.address) {
-            alert("Por favor, completa tu nombre y dirección para continuar.");
+        if (!formData.name || !formData.phone || !formData.address) {
+            alert("Por favor, completa nombre, teléfono y dirección para continuar.");
             return;
         }
 
@@ -81,7 +84,10 @@ const CartSidebar = () => {
 
             const result = await sendOrderToDiscord({
                 customerName: formData.name,
+                customerPhone: formData.phone,
                 customerAddress: formData.address,
+                deliveryDate: formData.date,
+                cardMessage: formData.message,
                 items: cartItems,
                 orderNumber: orderNumber
             });
@@ -90,8 +96,7 @@ const CartSidebar = () => {
                 setOrderStatus({ sent: true, sending: false, error: false });
                 setCompletedOrder({
                     number: orderNumber,
-                    name: formData.name,
-                    address: formData.address,
+                    ...formData,
                     items: [...cartItems]
                 });
             } else {
@@ -108,9 +113,9 @@ const CartSidebar = () => {
         if (!completedOrder) return;
 
         const doc = new jsPDF();
-        const { number, name, address, items } = completedOrder;
+        const { number, name, phone, address, date, message, items } = completedOrder;
         const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const date = new Date().toLocaleDateString('es-AR');
+        const today = new Date().toLocaleDateString('es-AR');
 
         // Header
         doc.setFontSize(22);
@@ -122,45 +127,64 @@ const CartSidebar = () => {
         doc.text("BOLETA DE PEDIDO", 105, 30, { align: "center" });
 
         // Order Info
-        doc.setFontSize(12);
-        doc.text(`Nº PEDIDO: ${number}`, 20, 50);
-        doc.text(`FECHA: ${date}`, 20, 60);
-        doc.text(`CLIENTE: ${name}`, 20, 70);
-        doc.text(`DIRECCIÓN: ${address}`, 20, 80);
+        doc.setFontSize(11);
+        let y = 50;
+        doc.text(`Nº PEDIDO: ${number}`, 20, y); y += 8;
+        doc.text(`FECHA EMISIÓN: ${today}`, 20, y); y += 12;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("DATOS DEL CLIENTE:", 20, y); y += 8;
+        doc.setFont("helvetica", "normal");
+        doc.text(`Nombre: ${name}`, 25, y); y += 6;
+        doc.text(`Teléfono: ${phone}`, 25, y); y += 6;
+        doc.text(`Dirección: ${address}`, 25, y); y += 12;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("DATOS DE ENTREGA:", 20, y); y += 8;
+        doc.setFont("helvetica", "normal");
+        doc.text(`Fecha Entrega: ${date || "Lo antes posible"}`, 25, y); y += 6;
+        if (message) {
+            doc.text(`Mensaje Tarjeta: "${message}"`, 25, y); y += 12;
+        } else {
+            y += 6;
+        }
 
         // Line
         doc.setLineWidth(0.5);
-        doc.line(20, 90, 190, 90);
+        doc.line(20, y, 190, y);
+        y += 10;
 
         // Products
-        let yPos = 100;
         doc.setFontSize(14);
-        doc.text("DETALLE:", 20, yPos);
-        yPos += 10;
+        doc.setFont("helvetica", "bold");
+        doc.text("DETALLE:", 20, y);
+        y += 10;
 
-        doc.setFontSize(12);
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "normal");
         items.forEach((item, index) => {
             const subtotal = item.price * item.quantity;
-            doc.text(`${index + 1}. ${item.name}`, 20, yPos);
-            doc.text(`${item.quantity} x $${item.price.toLocaleString()}`, 120, yPos);
-            doc.text(`$${subtotal.toLocaleString()}`, 170, yPos, { align: "right" });
-            yPos += 10;
+            doc.text(`${index + 1}. ${item.name}`, 20, y);
+            doc.text(`${item.quantity} x $${item.price.toLocaleString()}`, 120, y);
+            doc.text(`$${subtotal.toLocaleString()}`, 170, y, { align: "right" });
+            y += 8;
         });
 
         // Total
-        doc.line(20, yPos, 190, yPos);
-        yPos += 15;
+        y += 5;
+        doc.line(20, y, 190, y);
+        y += 10;
         doc.setFontSize(16);
         doc.setFont("helvetica", "bold");
-        doc.text(`TOTAL: $${total.toLocaleString()}`, 190, yPos, { align: "right" });
+        doc.text(`TOTAL: $${total.toLocaleString()}`, 190, y, { align: "right" });
 
         // Footer
-        yPos += 30;
+        y += 20;
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(100, 100, 100);
-        doc.text("Gracias por tu compra!", 105, yPos, { align: "center" });
-        doc.text("Te contactaremos pronto para confirmar disponibilidad.", 105, yPos + 5, { align: "center" });
+        doc.text("Gracias por tu compra!", 105, y, { align: "center" });
+        doc.text("Te contactaremos pronto para confirmar disponibilidad.", 105, y + 5, { align: "center" });
 
         doc.save(`Boleta-${number}.pdf`);
     };
@@ -343,7 +367,7 @@ const CartSidebar = () => {
 
                                     <div className="space-y-3">
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Nombre Completo</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Nombre Completo *</label>
                                             <input
                                                 type="text"
                                                 name="name"
@@ -353,8 +377,24 @@ const CartSidebar = () => {
                                                 className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
                                             />
                                         </div>
+
                                         <div>
-                                            <label className="block text-xs font-medium text-gray-500 mb-1">Dirección de Entrega</label>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Teléfono (WhatsApp) *</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="tel"
+                                                    name="phone"
+                                                    value={formData.phone}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Ej: 11 1234 5678"
+                                                    className="w-full pl-9 px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
+                                                />
+                                                <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Dirección de Entrega *</label>
                                             <div className="relative flex gap-2">
                                                 <div className="relative flex-grow">
                                                     <input
@@ -380,9 +420,35 @@ const CartSidebar = () => {
                                                     )}
                                                 </button>
                                             </div>
-                                            <p className="text-[10px] text-gray-400 mt-1 ml-1">
-                                                Ingresa la dirección o usa el botón <Crosshair size={10} className="inline" /> para detectar tu ubicación exacta.
-                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Fecha de Entrega (Opcional)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="date"
+                                                    name="date"
+                                                    value={formData.date}
+                                                    onChange={handleInputChange}
+                                                    className="w-full pl-9 px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm"
+                                                />
+                                                <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-500 mb-1">Mensaje para la Tarjeta (Opcional)</label>
+                                            <div className="relative">
+                                                <textarea
+                                                    name="message"
+                                                    value={formData.message}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Escribe una dedicatoria..."
+                                                    rows="2"
+                                                    className="w-full pl-9 px-3 py-2 rounded-lg border border-gray-200 focus:border-primary focus:ring-1 focus:ring-primary outline-none text-sm resize-none"
+                                                />
+                                                <Heart size={16} className="absolute left-3 top-3 text-gray-400" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
