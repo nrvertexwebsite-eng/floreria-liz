@@ -16,11 +16,12 @@ export const sendOrderToDiscord = async (orderData) => {
     }));
 
     // Mapa de Google Maps
-    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress)}`;
+    const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(customerAddress || '')}`;
 
     // Link directo a WhatsApp del cliente (limpiar número)
-    const cleanPhone = customerPhone.replace(/\D/g, '');
-    const clientWhatsApp = `https://wa.me/${cleanPhone}`;
+    const phoneStr = customerPhone || '';
+    const cleanPhone = phoneStr.replace(/\D/g, '');
+    const clientWhatsApp = cleanPhone ? `https://wa.me/${cleanPhone}` : '#';
 
     // Crear mensaje embed para Discord
     const embed = {
@@ -40,17 +41,17 @@ export const sendOrderToDiscord = async (orderData) => {
             },
             {
                 name: "👤 Cliente",
-                value: customerName,
+                value: customerName || "Cliente",
                 inline: true
             },
             {
                 name: "📱 Teléfono",
-                value: `[${customerPhone}](${clientWhatsApp}) \n🔗 [Click para Chatear](${clientWhatsApp})`,
+                value: cleanPhone ? `[${phoneStr}](${clientWhatsApp}) \n🔗 [Click para Chatear](${clientWhatsApp})` : "No especificado",
                 inline: true
             },
             {
                 name: "📍 Dirección",
-                value: `${customerAddress}\n[Ver en Google Maps](${mapsLink})`,
+                value: `${customerAddress || 'No especificada'}\n[Ver en Google Maps](${mapsLink})`,
                 inline: false
             },
             {
@@ -83,7 +84,7 @@ export const sendOrderToDiscord = async (orderData) => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                content: `@everyone 📢 ¡Nuevo pedido de ${customerName}! Total: $${total.toLocaleString()}`,
+                content: `@everyone 📢 ¡Nuevo pedido de ${customerName || 'Cliente'}! Total: $${total.toLocaleString()}`,
                 tts: true, // ACTIVA LA VOZ EN DISCORD
                 embeds: [embed]
             })
