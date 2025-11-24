@@ -1,13 +1,53 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
-import { products, categories } from '../data/products';
+import { client, urlFor } from '../sanityClient';
 
 const Catalog = () => {
+    const [products, setProducts] = useState([]);
     const [activeCategory, setActiveCategory] = useState("Todos");
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchProducts = async () => {
+            try {
+                const query = '*[_type == "product"]';
+                const sanityProducts = await client.fetch(query);
+
+                const formattedProducts = sanityProducts.map(product => ({
+                    id: product._id,
+                    name: product.name,
+                    category: product.category,
+                    price: product.price,
+                    description: product.description,
+                    image: product.image ? urlFor(product.image).width(800).url() : '',
+                    originalImage: product.image // Keep original for modal if needed
+                }));
+
+                setProducts(formattedProducts);
+            } catch (error) {
+                console.error("Error fetching products:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchProducts();
+    }, []);
+
+    // Get unique categories from products
+    const categories = ["Todos", ...new Set(products.map(p => p.category))];
 
     const filteredProducts = activeCategory === "Todos"
         ? products
         : products.filter(product => product.category === activeCategory);
+
+    if (loading) {
+        return (
+            <section id="catalogo" className="py-20 bg-background flex justify-center items-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+            </section>
+        );
+    }
 
     return (
         <section id="catalogo" className="py-20 bg-background">
