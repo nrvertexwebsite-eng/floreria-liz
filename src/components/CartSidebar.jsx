@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { X, Trash2, MessageCircle, MapPin, User, Crosshair } from 'lucide-react';
+import { X, Trash2, MessageCircle, MapPin, User, Crosshair, Send, CheckCircle, Loader } from 'lucide-react';
 import { useCart } from '../context/CartContext';
+import { sendOrderToDiscord } from '../config/discord';
 
 const CartSidebar = () => {
     const { cartItems, isCartOpen, toggleCart, removeFromCart, updateQuantity } = useCart();
@@ -9,6 +10,7 @@ const CartSidebar = () => {
         address: ''
     });
     const [isLocating, setIsLocating] = useState(false);
+    const [orderStatus, setOrderStatus] = useState({ sent: false, sending: false, error: false });
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -62,7 +64,35 @@ const CartSidebar = () => {
         );
     };
 
-    const handleTelegramCheckout = () => {
+    const handleDiscordCheckout = async () => {
+        if (cartItems.length === 0) return;
+        if (!formData.name || !formData.address) {
+            alert("Por favor, completa tu nombre y dirección para continuar.");
+            return;
+        }
+
+        setOrderStatus({ sent: false, sending: true, error: false });
+
+        try {
+            const result = await sendOrderToDiscord({
+                customerName: formData.name,
+                customerAddress: formData.address,
+                items: cartItems
+            });
+
+            if (result.success) {
+                setOrderStatus({ sent: true, sending: false, error: false });
+            } else {
+                throw new Error('Error al enviar el pedido');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            setOrderStatus({ sent: false, sending: false, error: true });
+            alert('Hubo un error al enviar el pedido. Por favor, intenta con WhatsApp.');
+        }
+    };
+
+    const handleWhatsAppCheckout = () => {
         const phoneNumber = "5491172383806";
 
         if (cartItems.length === 0) return;
@@ -73,33 +103,28 @@ const CartSidebar = () => {
 
         const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formData.address)}`;
 
-        // MENSAJE COMPLETO en Telegram (sin límite de caracteres)
-        let message = `🌸 *NUEVO PEDIDO WEB - FLORERÍA LIZ*\n\n`;
-        message += `*DATOS DEL CLIENTE:*\n`;
-        message += `👤 Nombre: ${formData.name}\n`;
-        message += `📍 Dirección: ${formData.address}\n`;
-        message += `🗺️ Ver mapa: ${mapsLink}\n\n`;
-        message += `*DETALLE DEL PEDIDO:*\n`;
-        message += `━━━━━━━━━━━━━━━━━━\n\n`;
+        let message = `*🌸 NUEVO PEDIDO WEB*\\n`;
+        message += `*Cliente:* ${formData.name}\\n`;
+        message += `*Dirección:* ${formData.address}\\n`;
+        message += `*Mapa:* ${mapsLink}\\n\\n`;
 
         let total = 0;
         cartItems.forEach((item, index) => {
             const subtotal = item.price * item.quantity;
             total += subtotal;
-            message += `${index + 1}. *${item.name}*\n`;
-            message += `   📦 Cantidad: ${item.quantity}\n`;
-            message += `   💰 Precio: $${item.price.toLocaleString()}\n`;
-            message += `   💵 Subtotal: $${subtotal.toLocaleString()}\n`;
-            message += `   🖼️ Imagen: ${item.image}\n\n`;
+            message += `${index + 1}. ${item.name}\\n`;
+            message += `Cant: ${item.quantity} x $${item.price.toLocaleString()}\\n\\n`;
         });
 
-        message += `━━━━━━━━━━━━━━━━━━\n`;
-        message += `💳 *TOTAL: $${total.toLocaleString()}*\n`;
-        message += `━━━━━━━━━━━━━━━━━━\n\n`;
-        message += `Por favor confirmar disponibilidad y costo de envío. ¡Gracias! 🌸`;
+        message += `*TOTAL: $${total.toLocaleString()}*`;
 
-        // Abrir Telegram con el mensaje completo
-        window.open(`https://t.me/+${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
+        window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
+    };
+
+    const handleContactWhatsApp = () => {
+        const phoneNumber = "5491172383806";
+        const message = `Hola, acabo de enviar un pedido desde la web. ¿Podrían asesorarme?`;
+        window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     return (
@@ -127,6 +152,26 @@ const CartSidebar = () => {
                             <X size={24} />
                         </button>
                     </div>
+
+                    {/* Success Message */}
+                    {orderStatus.sent && (
+                        <div className="bg-green-50 border-b border-green-200 p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <CheckCircle className="text-green-600" size={32} />
+                                <div>
+                                    <h3 className="font-bold text-green-800 text-lg">¡Pedido Enviado!</h3>
+                                    <p className="text-green-700 text-sm">Tu pedido ha sido recibido. Te contactaremos pronto.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleContactWhatsApp}
+                                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3"
+                            >
+                                <MessageCircle size={20} />
+                                <span>Contactar por WhatsApp</span>
+                            </button>
+                        </div>
+                    )}
 
                     {/* Items List */}
                     <div className="flex-1 overflow-y-auto p-6">
@@ -250,7 +295,7 @@ const CartSidebar = () => {
                     </div>
 
                     {/* Footer Actions */}
-                    {cartItems.length > 0 && (
+                    {cartItems.length > 0 && !orderStatus.sent && (
                         <div className="p-6 border-t border-gray-100 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-gray-600">Total Estimado</span>
@@ -259,13 +304,33 @@ const CartSidebar = () => {
                                 </span>
                             </div>
 
-                            <button
-                                onClick={handleTelegramCheckout}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-blue-600/20 transform hover:-translate-y-1"
-                            >
-                                <MessageCircle size={20} />
-                                <span>Finalizar Pedido por Telegram</span>
-                            </button>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={handleDiscordCheckout}
+                                    disabled={orderStatus.sending}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-indigo-600/20 transform hover:-translate-y-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {orderStatus.sending ? (
+                                        <>
+                                            <Loader size={20} className="animate-spin" />
+                                            <span>Enviando pedido...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Send size={20} />
+                                            <span>Enviar Pedido</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <button
+                                    onClick={handleWhatsAppCheckout}
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-green-600/20"
+                                >
+                                    <MessageCircle size={20} />
+                                    <span>Enviar por WhatsApp</span>
+                                </button>
+                            </div>
 
                             <p className="text-xs text-gray-400 text-center mt-3">
                                 Tu pedido será enviado directamente a la florería
