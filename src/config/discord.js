@@ -3,7 +3,7 @@ export const DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/14423105860
 
 // Send order to Discord
 export const sendOrderToDiscord = async (orderData) => {
-    const { customerName, customerAddress, items } = orderData;
+    const { customerName, customerAddress, items, orderNumber } = orderData;
 
     // Calcular total
     const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -20,9 +20,15 @@ export const sendOrderToDiscord = async (orderData) => {
 
     // Crear mensaje embed para Discord
     const embed = {
-        title: "🌸 NUEVO PEDIDO WEB - FLORERÍA LIZ",
+        title: `🌸 NUEVO PEDIDO #${orderNumber}`,
+        description: "Se ha recibido un nuevo pedido desde la web.",
         color: 0xE91E63, // Color rosa
         fields: [
+            {
+                name: "📋 Nº Pedido",
+                value: `**${orderNumber}**`,
+                inline: true
+            },
             {
                 name: "👤 Cliente",
                 value: customerName,
@@ -46,7 +52,7 @@ export const sendOrderToDiscord = async (orderData) => {
             }
         ],
         footer: {
-            text: "Por favor confirmar disponibilidad y costo de envío"
+            text: `ID: ${orderNumber} • Por favor confirmar disponibilidad`
         },
         timestamp: new Date().toISOString()
     };
@@ -58,7 +64,7 @@ export const sendOrderToDiscord = async (orderData) => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                content: "@everyone 📢 Nuevo pedido recibido",
+                content: `@everyone 📢 Nuevo pedido **${orderNumber}** recibido`,
                 embeds: [embed]
             })
         });

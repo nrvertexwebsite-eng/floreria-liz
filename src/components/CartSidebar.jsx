@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { X, Trash2, MessageCircle, MapPin, User, Crosshair, Send, CheckCircle, Loader } from 'lucide-react';
+import { X, Trash2, MessageCircle, MapPin, User, Crosshair, Send, CheckCircle, Loader, FileText, ExternalLink } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { sendOrderToDiscord } from '../config/discord';
+import { jsPDF } from 'jspdf';
 
 const CartSidebar = () => {
     const { cartItems, isCartOpen, toggleCart, removeFromCart, updateQuantity } = useCart();
@@ -11,6 +12,7 @@ const CartSidebar = () => {
     });
     const [isLocating, setIsLocating] = useState(false);
     const [orderStatus, setOrderStatus] = useState({ sent: false, sending: false, error: false });
+    const [completedOrder, setCompletedOrder] = useState(null);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -80,20 +82,18 @@ const CartSidebar = () => {
             const result = await sendOrderToDiscord({
                 customerName: formData.name,
                 customerAddress: formData.address,
-                items: cartItems
+                items: cartItems,
+                orderNumber: orderNumber
             });
 
             if (result.success) {
                 setOrderStatus({ sent: true, sending: false, error: false });
-
-                // Generar boleta de pedido (texto simple que se puede imprimir)
-                generateReceipt(orderNumber, formData.name, formData.address, cartItems);
-
-                // Esperar 1 segundo y abrir WhatsApp con confirmación
-                setTimeout(() => {
-                    sendConfirmationToWhatsApp(orderNumber, formData.name, cartItems);
-                }, 1000);
-
+                setCompletedOrder({
+                    number: orderNumber,
+                    name: formData.name,
+                    address: formData.address,
+                    items: [...cartItems]
+                });
             } else {
                 throw new Error('Error al enviar el pedido');
             }
@@ -104,72 +104,78 @@ const CartSidebar = () => {
         }
     };
 
-    const generateReceipt = (orderNumber, customerName, customerAddress, items) => {
+    const generatePDFReceipt = () => {
+        if (!completedOrder) return;
+
+        const doc = new jsPDF();
+        const { number, name, address, items } = completedOrder;
         const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         const date = new Date().toLocaleDateString('es-AR');
 
-        // Crear contenido de la boleta
-        let receiptContent = `
-════════════════════════════════
-      FLORERÍA LIZ
-   BOLETA DE PEDIDO
-════════════════════════════════
+        // Header
+        doc.setFontSize(22);
+        doc.setTextColor(233, 30, 99); // Pink color
+        doc.text("FLORERÍA LIZ", 105, 20, { align: "center" });
 
-Nº PEDIDO: ${orderNumber}
-FECHA: ${date}
+        doc.setFontSize(16);
+        doc.setTextColor(0, 0, 0);
+        doc.text("BOLETA DE PEDIDO", 105, 30, { align: "center" });
 
-CLIENTE: ${customerName}
-DIRECCIÓN: ${customerAddress}
+        // Order Info
+        doc.setFontSize(12);
+        doc.text(`Nº PEDIDO: ${number}`, 20, 50);
+        doc.text(`FECHA: ${date}`, 20, 60);
+        doc.text(`CLIENTE: ${name}`, 20, 70);
+        doc.text(`DIRECCIÓN: ${address}`, 20, 80);
 
-────────────────────────────────
-PRODUCTOS:
-────────────────────────────────
-`;
+        // Line
+        doc.setLineWidth(0.5);
+        doc.line(20, 90, 190, 90);
 
+        // Products
+        let yPos = 100;
+        doc.setFontSize(14);
+        doc.text("DETALLE:", 20, yPos);
+        yPos += 10;
+
+        doc.setFontSize(12);
         items.forEach((item, index) => {
             const subtotal = item.price * item.quantity;
-            receiptContent += `
-${index + 1}. ${item.name}
-   Cantidad: ${item.quantity}
-   Precio: $${item.price.toLocaleString()}
-   Subtotal: $${subtotal.toLocaleString()}
-`;
+            doc.text(`${index + 1}. ${item.name}`, 20, yPos);
+            doc.text(`${item.quantity} x $${item.price.toLocaleString()}`, 120, yPos);
+            doc.text(`$${subtotal.toLocaleString()}`, 170, yPos, { align: "right" });
+            yPos += 10;
         });
 
-        receiptContent += `
-────────────────────────────────
-TOTAL: $${total.toLocaleString()}
-────────────────────────────────
+        // Total
+        doc.line(20, yPos, 190, yPos);
+        yPos += 15;
+        doc.setFontSize(16);
+        doc.setFont("helvetica", "bold");
+        doc.text(`TOTAL: $${total.toLocaleString()}`, 190, yPos, { align: "right" });
 
-Gracias por tu compra!
-Te contactaremos pronto para
-confirmar disponibilidad y envío.
+        // Footer
+        yPos += 30;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 100, 100);
+        doc.text("Gracias por tu compra!", 105, yPos, { align: "center" });
+        doc.text("Te contactaremos pronto para confirmar disponibilidad.", 105, yPos + 5, { align: "center" });
 
-🌸 Florería Liz 🌸
-════════════════════════════════
-`;
-
-        // Crear y descargar archivo de texto
-        const blob = new Blob([receiptContent], { type: 'text/plain' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Boleta-${orderNumber}.txt`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        doc.save(`Boleta-${number}.pdf`);
     };
 
-    const sendConfirmationToWhatsApp = (orderNumber, customerName, items) => {
-        const phoneNumber = "5491172383806";
-        const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const handleConfirmWhatsApp = () => {
+        if (!completedOrder) return;
 
-        let message = `Hola! Acabo de realizar un pedido:\n\n`;
-        message += `📋 *Nº PEDIDO:* ${orderNumber}\n`;
-        message += `👤 *NOMBRE:* ${customerName}\n`;
-        message += `💰 *TOTAL:* $${total.toLocaleString()}\n\n`;
-        message += `Ya envié los detalles completos. ¿Podrían confirmar disponibilidad?`;
+        const phoneNumber = "5491172383806";
+        const total = completedOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        let message = `Hola! Acabo de enviar mi pedido por la web:\n\n`;
+        message += `🆔 *ID PEDIDO: ${completedOrder.number}*\n`;
+        message += `👤 *Nombre:* ${completedOrder.name}\n`;
+        message += `💰 *Total:* $${total.toLocaleString()}\n\n`;
+        message += `Quedo a la espera de la confirmación. ¡Gracias!`;
 
         window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
@@ -203,12 +209,6 @@ confirmar disponibilidad y envío.
         window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
-    const handleContactWhatsApp = () => {
-        const phoneNumber = "5491172383806";
-        const message = `Hola, acabo de enviar un pedido desde la web. ¿Podrían asesorarme?`;
-        window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
-    };
-
     return (
         <>
             {/* Overlay */}
@@ -236,15 +236,36 @@ confirmar disponibilidad y envío.
                     </div>
 
                     {/* Success Message */}
-                    {orderStatus.sent && (
+                    {orderStatus.sent && completedOrder && (
                         <div className="bg-green-50 border-b border-green-200 p-6">
                             <div className="flex items-center gap-3 mb-4">
                                 <CheckCircle className="text-green-600" size={32} />
                                 <div>
-                                    <h3 className="font-bold text-green-800 text-lg">¡Pedido Enviado!</h3>
-                                    <p className="text-green-700 text-sm">Se descargó tu boleta y se abrió WhatsApp automáticamente.</p>
+                                    <h3 className="font-bold text-green-800 text-lg">¡Pedido Recibido!</h3>
+                                    <p className="text-green-700 text-sm">ID: <strong>{completedOrder.number}</strong></p>
                                 </div>
                             </div>
+
+                            <div className="space-y-3">
+                                <button
+                                    onClick={generatePDFReceipt}
+                                    className="w-full bg-white border border-green-600 text-green-700 hover:bg-green-50 font-medium py-2 px-4 rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
+                                >
+                                    <FileText size={18} />
+                                    <span>Descargar Boleta (PDF)</span>
+                                </button>
+
+                                <button
+                                    onClick={handleConfirmWhatsApp}
+                                    className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-green-600/20"
+                                >
+                                    <MessageCircle size={20} />
+                                    <span>Confirmar por WhatsApp</span>
+                                </button>
+                            </div>
+                            <p className="text-xs text-center text-green-600 mt-3">
+                                Envíanos el mensaje de WhatsApp para agilizar tu pedido.
+                            </p>
                         </div>
                     )}
 
