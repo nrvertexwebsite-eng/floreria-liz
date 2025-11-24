@@ -74,6 +74,9 @@ const CartSidebar = () => {
         setOrderStatus({ sent: false, sending: true, error: false });
 
         try {
+            // Generar número de pedido único
+            const orderNumber = `FLZ-${Date.now().toString().slice(-8)}`;
+
             const result = await sendOrderToDiscord({
                 customerName: formData.name,
                 customerAddress: formData.address,
@@ -82,6 +85,15 @@ const CartSidebar = () => {
 
             if (result.success) {
                 setOrderStatus({ sent: true, sending: false, error: false });
+
+                // Generar boleta de pedido (texto simple que se puede imprimir)
+                generateReceipt(orderNumber, formData.name, formData.address, cartItems);
+
+                // Esperar 1 segundo y abrir WhatsApp con confirmación
+                setTimeout(() => {
+                    sendConfirmationToWhatsApp(orderNumber, formData.name, cartItems);
+                }, 1000);
+
             } else {
                 throw new Error('Error al enviar el pedido');
             }
@@ -90,6 +102,76 @@ const CartSidebar = () => {
             setOrderStatus({ sent: false, sending: false, error: true });
             alert('Hubo un error al enviar el pedido. Por favor, intenta con WhatsApp.');
         }
+    };
+
+    const generateReceipt = (orderNumber, customerName, customerAddress, items) => {
+        const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const date = new Date().toLocaleDateString('es-AR');
+
+        // Crear contenido de la boleta
+        let receiptContent = `
+════════════════════════════════
+      FLORERÍA LIZ
+   BOLETA DE PEDIDO
+════════════════════════════════
+
+Nº PEDIDO: ${orderNumber}
+FECHA: ${date}
+
+CLIENTE: ${customerName}
+DIRECCIÓN: ${customerAddress}
+
+────────────────────────────────
+PRODUCTOS:
+────────────────────────────────
+`;
+
+        items.forEach((item, index) => {
+            const subtotal = item.price * item.quantity;
+            receiptContent += `
+${index + 1}. ${item.name}
+   Cantidad: ${item.quantity}
+   Precio: $${item.price.toLocaleString()}
+   Subtotal: $${subtotal.toLocaleString()}
+`;
+        });
+
+        receiptContent += `
+────────────────────────────────
+TOTAL: $${total.toLocaleString()}
+────────────────────────────────
+
+Gracias por tu compra!
+Te contactaremos pronto para
+confirmar disponibilidad y envío.
+
+🌸 Florería Liz 🌸
+════════════════════════════════
+`;
+
+        // Crear y descargar archivo de texto
+        const blob = new Blob([receiptContent], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Boleta-${orderNumber}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const sendConfirmationToWhatsApp = (orderNumber, customerName, items) => {
+        const phoneNumber = "5491172383806";
+        const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+        let message = `Hola! Acabo de realizar un pedido:\n\n`;
+        message += `📋 *Nº PEDIDO:* ${orderNumber}\n`;
+        message += `👤 *NOMBRE:* ${customerName}\n`;
+        message += `💰 *TOTAL:* $${total.toLocaleString()}\n\n`;
+        message += `Ya envié los detalles completos. ¿Podrían confirmar disponibilidad?`;
+
+        window.open(`https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`, '_blank');
     };
 
     const handleWhatsAppCheckout = () => {
@@ -160,16 +242,9 @@ const CartSidebar = () => {
                                 <CheckCircle className="text-green-600" size={32} />
                                 <div>
                                     <h3 className="font-bold text-green-800 text-lg">¡Pedido Enviado!</h3>
-                                    <p className="text-green-700 text-sm">Tu pedido ha sido recibido. Te contactaremos pronto.</p>
+                                    <p className="text-green-700 text-sm">Se descargó tu boleta y se abrió WhatsApp automáticamente.</p>
                                 </div>
                             </div>
-                            <button
-                                onClick={handleContactWhatsApp}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-3 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3"
-                            >
-                                <MessageCircle size={20} />
-                                <span>Contactar por WhatsApp</span>
-                            </button>
                         </div>
                     )}
 
@@ -295,7 +370,7 @@ const CartSidebar = () => {
                     </div>
 
                     {/* Footer Actions */}
-                    {cartItems.length > 0 && !orderStatus.sent && (
+                    {cartItems.length > 0 && (
                         <div className="p-6 border-t border-gray-100 bg-white shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                             <div className="flex justify-between items-center mb-4">
                                 <span className="text-gray-600">Total Estimado</span>
